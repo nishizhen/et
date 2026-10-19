@@ -1,0 +1,124 @@
+diff --git a/_worker.js b/_worker.js
+index 6868657..ce76b6f 100644
+--- a/_worker.js
++++ b/_worker.js
+@@ -349,7 +349,7 @@ export default {
+ 						if (!ua.includes('mozilla')) responseHeaders["Content-Disposition"] = `attachment; filename*=utf-8''${encodeURIComponent(config_JSON.优选订阅生成.SUBNAME)}`;
+ 						const 协议类型 = ((url.searchParams.has('surge') || ua.includes('surge')) && config_JSON.协议类型 !== 'ss') ? 'tro' + 'jan' : config_JSON.协议类型;
+ 						let 订阅内容 = '';
+-						if (订阅类型 === 'mixed') {
++						if (订阅类型 === 'mixed' || 订阅类型 === 'clash') { // [本地补丁] clash 走本地链接生成，不再请求 SUBAPI 外部转换
+ 							const TLS分片参数 = config_JSON.TLS分片 == 'Shadowrocket' ? `&fragment=${encodeURIComponent('1,40-60,30-50,tlshello')}` : config_JSON.TLS分片 == 'Happ' ? `&fragment=${encodeURIComponent('3,1,tlshello')}` : '';
+ 							let 完整优选IP = [], 其他节点LINK = '', 反代IP池 = [];
+ 
+@@ -485,6 +485,11 @@ export default {
+ 
+ 						if (订阅类型 === 'mixed' && (!ua.includes('mozilla') || url.searchParams.has('b64') || url.searchParams.has('base64'))) 订阅内容 = btoa(订阅内容);
+ 
++						if (订阅类型 === 'clash') { // [本地补丁] 本地生成 Clash Meta YAML，零第三方依赖
++							订阅内容 = 本地生成ClashYAML(订阅内容, config_JSON);
++							responseHeaders["content-type"] = 'application/x-yaml; charset=utf-8';
++						}
++
+ 						if (订阅类型 === 'singbox') {
+ 							订阅内容 = await Singbox订阅配置文件热补丁(订阅内容, config_JSON);
+ 							responseHeaders["content-type"] = 'application/json; charset=utf-8';
+@@ -4818,6 +4823,98 @@ function log(...args) {
+ 	if (调试日志打印) console.log(...args);
+ }
+ 
++// ============================================================
++// [本地补丁] 本地 Clash YAML 生成器 —— 零第三方订阅转换依赖
++// 将本地生成的 vless/trojan 链接直接转为 Clash Meta YAML，
++// 替代向 config_JSON.订阅转换配置.SUBAPI 发起的外部转换请求。
++// 同步上游后需重放本补丁（共 3 处，搜索 "[本地补丁]"）。
++// ============================================================
++function 本地生成ClashYAML(链接列表文本, config_JSON = {}) {
++	const 转义 = (值) => String(值 ?? '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
++	const 安全解码 = (文本) => { try { return decodeURIComponent(文本); } catch { return 文本; } };
++	const 解析链接 = (行) => {
++		const m = /^(vless|trojan):\/\/([^@/?#]+)@(\[[0-9a-fA-F:]+\]|[^:/?#]+):(\d+)(?:\?([^#]*))?(?:#(.*))?$/.exec(行.trim());
++		if (!m) return null;
++		const [, 类型, 凭据, 服务器, 端口, 查询 = '', 备注 = ''] = m;
++		const 参数 = new URLSearchParams(查询);
++		const 传输 = (参数.get('type') || 'tcp').toLowerCase();
++		const tls开启 = (参数.get('security') || '').toLowerCase() === 'tls';
++		const 节点 = {
++			name: 安全解码(备注) || `${服务器}:${端口}`,
++			type: 类型,
++			server: 服务器.replace(/^\[|\]$/g, ''),
++			port: Number(端口),
++			tls: tls开启,
++			network: 传输,
++		};
++		if (类型 === 'vless') 节点.uuid = 凭据; else 节点.password = 凭据;
++		if (tls开启) {
++			const sni = 参数.get('sni') || 参数.get('host') || '';
++			if (sni) 节点.servername = sni;
++			const fp = 参数.get('fp');
++			if (fp) 节点['client-fingerprint'] = fp;
++			const alpn = 参数.get('alpn');
++			if (alpn) 节点.alpn = alpn.split(',').map(a => a.trim()).filter(Boolean);
++		}
++		if (传输 === 'ws') {
++			节点.wsPath = 参数.get('path') || '/';
++			节点.wsHost = 参数.get('host') || 节点.servername || 服务器;
++		}
++		return 节点;
++	};
++
++	const 节点列表 = 链接列表文本.split(/\n+/).map(解析链接).filter(Boolean);
++	if (节点列表.length === 0) return 链接列表文本; // 无 vless/trojan 链接（如纯 ss 配置）时原样返回，行为回退为旧逻辑
++	const 已用名称 = new Set();
++	for (const p of 节点列表) {
++		let n = p.name, i = 2;
++		while (已用名称.has(n)) n = `${p.name} (${i++})`;
++		已用名称.add(n); p.name = n;
++	}
++
++	const 行 = [];
++	行.push('# 由 edgetunnel [本地补丁] 生成，未经过任何第三方订阅转换服务');
++	行.push('proxies:');
++	for (const p of 节点列表) {
++		行.push(`  - name: "${转义(p.name)}"`);
++		行.push(`    type: ${p.type}`);
++		行.push(`    server: ${p.server}`);
++		行.push(`    port: ${p.port}`);
++		if (p.uuid) 行.push(`    uuid: ${p.uuid}`);
++		if (p.password !== undefined) 行.push(`    password: "${转义(p.password)}"`);
++		if (p.tls) 行.push('    tls: true');
++		if (p.servername) 行.push(`    servername: "${转义(p.servername)}"`);
++		if (p['client-fingerprint']) 行.push(`    client-fingerprint: ${转义(p['client-fingerprint'])}`);
++		if (p.alpn && p.alpn.length) 行.push(`    alpn: [${p.alpn.map(a => `"${转义(a)}"`).join(', ')}]`);
++		行.push('    udp: true');
++		if (p.network && p.network !== 'tcp') {
++			行.push(`    network: ${p.network}`);
++			if (p.network === 'ws') {
++				行.push('    ws-opts:');
++				行.push(`      path: "${转义(p.wsPath)}"`);
++				行.push('      headers:');
++				行.push(`        Host: "${转义(p.wsHost)}"`);
++			}
++		}
++	}
++	const 名称数组 = 节点列表.map(p => `"${转义(p.name)}"`);
++	行.push('proxy-groups:');
++	行.push('  - name: "节点选择"');
++	行.push('    type: select');
++	行.push(`    proxies: ["自动选择", "DIRECT", ${名称数组.join(', ')}]`);
++	行.push('  - name: "自动选择"');
++	行.push('    type: url-test');
++	行.push('    url: https://www.gstatic.com/generate_204');
++	行.push('    interval: 300');
++	行.push('    tolerance: 50');
++	行.push(`    proxies: [${名称数组.join(', ')}]`);
++	行.push('rules:');
++	行.push('  - GEOIP,LAN,DIRECT,no-resolve');
++	行.push('  - GEOIP,CN,DIRECT');
++	行.push('  - MATCH,节点选择');
++	return 行.join('\n') + '\n';
++}
++
+ function Clash订阅配置文件热补丁(Clash_原始订阅内容, config_JSON = {}) {
+ 	const uuid = config_JSON?.UUID || null;
+ 	const ECH启用 = Boolean(config_JSON?.ECH);
