@@ -138,9 +138,16 @@ A(mod.decodeEarlyData('!!!!', mod.uuidToBytes(uuid)) === null, 'early data 非�
 
 // ================= TOKEN / 身份 =================
 A(mod.resolveUserID(env) === uuid, 'resolveUserID env.UUID');
+A(mod.resolveUserID({ UUID: uuid.toUpperCase() }) === uuid, '大写 UUID 归一小写');
+A(mod.resolveUserID({ UUID: '  ' + uuid + ' ' }) === uuid, '带空格 UUID 容错');
+A(mod.resolveUserID({ uuid: uuid }) === uuid, '小写变量名 env.uuid 兼容');
 A(mod.resolveUserID({}) === '', '无 UUID → 空（拒绝服务）');
 A(mod.resolveUserID({ UUID: 'not-a-uuid' }) === '', '非法 UUID → 空');
 const expectToken = uuid; // TOKEN 直接 = UUID
+{
+	const upper = await mod.handleSubscription(makeRequest('x'), new URL('https://et.example.com/sub?token=' + uuid.toUpperCase() + '&clash'), env);
+	A(upper.body.includes('proxies:'), 'URL 大写 token 也通过（大小写不敏感）');
+}
 
 // ================= 订阅 =================
 const U = (q) => new URL('https://et.example.com/sub?token=' + expectToken + q);

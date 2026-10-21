@@ -31,7 +31,7 @@ const 特征码 = {
 	协议: 'vl' + 'ess',
 	名称: 'edge' + 'tunnel-lite',
 };
-const Version = 'lite-2026-10-21b';
+const Version = 'lite-2026-10-21c';
 const 合包目标 = 32 * 1024;        // 下行合包目标（与全量版 Grain 包大小一致）
 const 队列上限 = 8 * 1024 * 1024;  // 上行缓冲上限，超限断链防内存堆积
 
@@ -54,7 +54,8 @@ export default {
 const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
 
 function resolveUserID(env) {
-	return (env.UUID && uuidRegex.test(env.UUID)) ? env.UUID.toLowerCase() : '';
+	const raw = String(env.UUID || env.uuid || '').trim();
+	return uuidRegex.test(raw) ? raw.toLowerCase() : '';
 }
 
 function text(body, status = 200) {
@@ -290,7 +291,9 @@ async function handleSubscription(request, url, env) {
 	const userID = resolveUserID(env);
 	if (!userID) return text('请设置 UUID 环境变量', 404);
 	const host = (env.HOST || url.hostname || '').toLowerCase();
-	if (url.searchParams.get('token') !== userID) return new Response(LANDING, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+	// token 大小写不敏感：env.UUID 常被生成器给成大写，而 userID 已统一小写
+	const token = String(url.searchParams.get('token') || '').trim().toLowerCase();
+	if (!token || token !== userID) return new Response(LANDING, { headers: { 'content-type': 'text/html; charset=utf-8' } });
 
 	const path = env.PATH || '/';
 	const nodes = [{ addr: host, port: 443, remark: '主节点' }].concat(parseAddList(env.ADD));
