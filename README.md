@@ -67,9 +67,16 @@
 3. **优选 IP**（可选但推荐）：在 OpenClash 所在网络运行
    [`patches/cf-bestip.sh`](./patches/cf-bestip.sh)：
 
+```sh
+# 免下载一行运行（OpenWrt SSH / macOS / Linux 通用，替换你的域名）：
+curl -sL https://cdn.jsdelivr.net/gh/nishizhen/et@main/patches/cf-bestip.sh | sh -s -- 你的域名
+```
+
    ```sh
-   sh cf-bestip.sh 你的域名     # 输出最后一行整行复制进 ADD 环境变量
+   sh cf-bestip.sh 你的域名 60 10 8443   # 完整参数：候选数 保留前N 端口
    ```
+
+   输出的最后一行整行复制进 `ADD` 环境变量即可。
 
 4. **OpenClash 订阅地址**（TOKEN 就是你的 UUID，无需计算）：
 

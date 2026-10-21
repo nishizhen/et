@@ -87,7 +87,15 @@ CF 边缘 IP），url-test 无事可做。IP 库只能来自你自己填入的 `
   不适用（那是反代场景，本方案本来也不是）
 
 **配置方法**：用本目录的测速脚本 [`cf-bestip.sh`](./cf-bestip.sh)，在
-**使用代理的那台设备所在网络**（OpenWrt SSH / Mac / Linux 均可）运行：
+**使用代理的那台设备所在网络**（OpenWrt SSH / Mac / Linux 均可）运行。
+
+免下载一行版（复制粘贴即可）：
+
+```sh
+curl -sL https://cdn.jsdelivr.net/gh/nishizhen/et@main/patches/cf-bestip.sh | sh -s -- 你的域名
+```
+
+或下载后运行：
 
 ```sh
 sh cf-bestip.sh 你的域名              # 默认：40 个候选，取最快 8 个，443 端口
