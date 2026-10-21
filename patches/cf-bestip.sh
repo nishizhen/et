@@ -61,7 +61,9 @@ TMPD="/tmp/cfbest.$$"; mkdir -p "$TMPD"
 TMO=10
 echo "域名=$DOMAIN 端口=$PORT 候选=$_CNT 个（每批 10 路并发，超时 ${TMO}s）..."
 
-# ---- 分批并发：每 10 路一批，弱网下不互相挤死 ----
+# ---- 两阶段探测：A=TLS+HTTP200（链路质量） B=WS 101（代理通道可用性） ----
+# 只有 A、B 双通过的 IP 才输出——GFW 对部分 CF 冷段的行为是 TLS 能握、WS 被掐，
+# 单测 TLS 会选出实际做节点连不上的 IP。
 _k=0
 for _ip in $IPS; do
 	_k=$((_k + 1))
@@ -70,33 +72,51 @@ for _ip in $IPS; do
 			-w "%{time_appconnect} %{http_code} %{time_total}" \
 			--resolve "$DOMAIN:$PORT:$_ip" "https://$DOMAIN:$PORT/version" 2>/dev/null)
 		[ -n "$_o" ] && echo "$_o $_ip" > "$TMPD/r$_k"
+		_c=$(curl -sk -o /dev/null -m 8 --connect-timeout 6 \
+			-H "Upgrade: websocket" -H "Connection: Upgrade" \
+			-H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+			-w "%{http_code}" --resolve "$DOMAIN:$PORT:$_ip" "https://$DOMAIN:$PORT/" 2>/dev/null)
+		[ "$_c" = "101" ] && echo "$_ip" > "$TMPD/w$_k"
 	) 2>/dev/null &
 	[ $(( _k % 10 )) -eq 0 ] && wait
 done
 wait
 
-sort -n "$TMPD"/r* 2>/dev/null | awk '$1 > 0 && $2 == 200' > "$TMPD/ranked"
+# WS 通过名单
+cat "$TMPD"/w* 2>/dev/null | sort -u > "$TMPD/wsok"
+# 只保留 TLS 成功且 WS 通过的，按握手耗时排序
+sort -n "$TMPD"/r* 2>/dev/null | awk '$1 > 0 && $2 == 200' \
+	| awk 'NR==FNR{ok[$1];next} ($4 in ok)' "$TMPD/wsok" - > "$TMPD/ranked"
+_tlsok=$(sort -n "$TMPD"/r* 2>/dev/null | awk '$1 > 0 && $2 == 200' | wc -l | tr -d ' ')
+_wsok=$(wc -l < "$TMPD/wsok" 2>/dev/null | tr -d ' ')
+[ "$_tlsok" -gt 0 ] && [ "$_wsok" = "0" ] && echo "⚠️ TLS 全通但 WS 全部被拦：本网络到该 Worker 的 WS 通道异常（检查 Worker 状态/运营商干扰），换端口 8443 或 2053 再试"
 _have=$(grep -c . "$TMPD/ranked" 2>/dev/null || echo 0)
 
 # ---- 结果不足：串行慢速重试未成功的候选（逐个来，抗抖动）----
 if [ "$_have" -lt "$TOP" ]; then
-	echo "有效结果 $_have/$TOP，串行重试其余候选（最多约 1-2 分钟）..."
+	echo "有效结果 $_have/$TOP（TLS通 $_tlsok / WS通 $_wsok），串行重试其余候选..."
 	for _ip in $IPS; do
 		[ "$_have" -ge "$TOP" ] && break
-		grep -q " $_ip\$" "$TMPD/ranked" 2>/dev/null && continue
+		awk -v ip="$_ip" '$4 == ip { f = 1 } END { exit !f }' "$TMPD/ranked" 2>/dev/null && continue
 		_o=$(curl -so /dev/null -m 15 --connect-timeout 10 \
 			-w "%{time_appconnect} %{http_code} %{time_total}" \
 			--resolve "$DOMAIN:$PORT:$_ip" "https://$DOMAIN:$PORT/version" 2>/dev/null)
-		case "$_o" in
-			*" 200 "*) echo "$_o $_ip" >> "$TMPD/retry"; _have=$((_have + 1)) ;;
-		esac
+		case "$_o" in *" 200 "*) ;; *) continue ;; esac
+		_c=$(curl -sk -o /dev/null -m 10 \
+			-H "Upgrade: websocket" -H "Connection: Upgrade" \
+			-H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
+			-w "%{http_code}" --resolve "$DOMAIN:$PORT:$_ip" "https://$DOMAIN:$PORT/" 2>/dev/null)
+		[ "$_c" = "101" ] && { echo "$_o $_ip" >> "$TMPD/retry"; echo "$_ip" >> "$TMPD/wsok"; _have=$((_have + 1)); }
 	done
-	[ -f "$TMPD/retry" ] && sort -n "$TMPD"/r* "$TMPD/retry" 2>/dev/null | awk '$1 > 0 && $2 == 200' > "$TMPD/ranked2" && mv "$TMPD/ranked2" "$TMPD/ranked"
+	if [ -f "$TMPD/retry" ]; then
+		sort -n "$TMPD"/r* "$TMPD/retry" 2>/dev/null | awk '$1 > 0 && $2 == 200' \
+			| awk 'NR==FNR{ok[$1];next} ($4 in ok)' "$TMPD/wsok" - > "$TMPD/ranked2" && mv "$TMPD/ranked2" "$TMPD/ranked"
+	fi
 fi
 
 if [ ! -s "$TMPD/ranked" ]; then
 	echo "全部候选失败：请确认 ①域名已部署 Worker ②端口为 CF 支持端口(443/8443/2053/2083/2087/2096) ③本网络可直连 CF"
-	echo "网络抖动也会导致偶发全失败，隔几分钟重跑一次即可"
+	echo "网络抖动也会导致偶发全失败，隔几分钟重跑一次；建议在 OpenWrt 路由器上运行（与代理出口一致）"
 	rm -rf "$TMPD"; exit 1
 fi
 
