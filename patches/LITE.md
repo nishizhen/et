@@ -37,8 +37,8 @@ CF 控制台 → 你的 Worker → 编辑器清空 → 粘贴 `et-lite.js` → �
 
 | 变量 | 必需 | 说明 |
 |---|---|---|
-| `UUID` | 建议 | 标准 v4；不设则从 ADMIN+KEY 推导 |
-| `ADMIN` / `KEY` | 建议 | 沿用现有值 |
+| `UUID` | ✅ 必填 | 标准 v4；不设则从 ADMIN+KEY 推导 |
+| `ADMIN` / `KEY` | 仅回退全量版时需要 | lite 设了 UUID 后不读取二者；与全量版共用以保持 TOKEN 一致时沿用现有值 |
 | `HOST` | 若与 Worker 域名不同才设 | 参与 TOKEN 计算 |
 | `ADD` | 可选 | 优选节点 `ip:port#备注`，逗号/换行分隔 |
 | `PROXYIP` | 可选 | 直连失败兜底（不设=纯直连） |

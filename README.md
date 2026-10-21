@@ -53,12 +53,14 @@
 2. **环境变量**：
 
    ```
-   UUID    = 你的标准 UUIDv4（节点身份）
-   ADMIN   = 后台密码（不设 UUID 时参与推导，建议独立强随机）
-   KEY     = 强随机（务必设置，默认值公开在源码里）
+   UUID    = 你的标准 UUIDv4（节点身份，必填）
    ADD     = 可选，优选 IP 清单，见下
    DEBUG   = 可选，true 输出隧道日志（wrangler tail 可见）
    ```
+
+   > lite 没有 admin 面板。`ADMIN`/`KEY` 仅在**不设置 UUID** 时用于推导节点身份
+   > （`MD5MD5(ADMIN+KEY)`，与全量版算法一致）；设置了 UUID 后二者不被读取，可不配。
+   > 若你还要在同域名上回退使用全量版 `_worker.js`，请保留它们以免身份/TOKEN 变化。
 
 3. **优选 IP**（可选但推荐）：在 OpenClash 所在网络运行
    [`patches/cf-bestip.sh`](./patches/cf-bestip.sh)：

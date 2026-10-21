@@ -14,10 +14,10 @@
 //   无 config_JSON/KV 读取、无每请求双重哈希
 //
 // 环境变量：
-//   UUID     节点 UUID（标准 v4）。不设则 = MD5MD5(ADMIN+KEY)，
+//   UUID     节点 UUID（标准 v4，必填）。不设则 = MD5MD5(ADMIN+KEY) 推导，
 //            与全量版算法一致 → 现有订阅地址/TOKEN 原样可用
-//   ADMIN    无 UUID 时的推导种子（沿用现有值）
-//   KEY      推导密钥（沿用现有值则 TOKEN 完全不变）
+//   ADMIN    仅当未设 UUID 时使用：推导种子（lite 无面板，设了 UUID 则不读取）
+//   KEY      仅当未设 UUID 时使用：推导盐（同上）
 //   HOST     订阅/节点域名，默认取请求 Host
 //   ADD      附加优选节点 ip:port#备注，逗号/换行分隔
 //   PROXYIP  直连失败时的兜底反代（host 或 host:port，默认端口 80）
