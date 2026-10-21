@@ -15,7 +15,7 @@ remote readable → 直接 server.send()（大帧一次拷贝）
 
 | | 全量版 | lite |
 |---|---|---|
-| 代码量 | 5.1 MB / 33241 行 | ~16 KB |
+| 代码量 | 5.1 MB / 33241 行 | ~17 KB / 369 行 |
 | 下行 WS 帧 | 32KB Grain 合包 | 32KB 合包（0ms 宏任务批处理，实测 4MB=129 帧） |
 | 每连接额外开销 | KV 读 config、双重哈希、UA 嗅探 | 缓存的 UUID 比对 |
 | 隧道功能 | WS/XHTTP/gRPC × vless/trojan/ss | 仅 VLESS+WS（TCP） |

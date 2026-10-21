@@ -1,224 +1,114 @@
-# 🚀 edgetunnel 2.1
-![后台页面](./img.png)
+# 🚀 et —— edgetunnel 个人自用精简版
 
-[![Stars](https://img.shields.io/github/stars/cmliu/edgetunnel?style=flat-square&logo=github)](https://github.com/cmliu/edgetunnel/stargazers)
-[![Forks](https://img.shields.io/github/forks/cmliu/edgetunnel?style=flat-square&logo=github)](https://github.com/cmliu/edgetunnel/network/members)
-[![License](https://img.shields.io/github/license/cmliu/edgetunnel?style=flat-square)](https://github.com/cmliu/edgetunnel/blob/main/LICENSE)
-[![Telegram](https://img.shields.io/badge/Telegram-Group-blue?style=flat-square&logo=telegram)](https://t.me/CMLiussss)
-[![YouTube](https://img.shields.io/badge/YouTube-Channel-red?style=flat-square&logo=youtube)](https://www.youtube.com/watch?v=LeT4jQUh8ok)
-[![zread](https://img.shields.io/badge/Ask_Zread-_.svg?style=flat-square&color=00b0aa&labelColor=000000&logo=data%3Aimage%2Fsvg%2Bxml%3Bbase64%2CPHN2ZyB3aWR0aD0iMTYiIGhlaWdodD0iMTYiIHZpZXdCb3g9IjAgMCAxNiAxNiIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTQuOTYxNTYgMS42MDAxSDIuMjQxNTZDMS44ODgxIDEuNjAwMSAxLjYwMTU2IDEuODg2NjQgMS42MDE1NiAyLjI0MDFWNC45NjAxQzEuNjAxNTYgNS4zMTM1NiAxLjg4ODEgNS42MDAxIDIuMjQxNTYgNS42MDAxSDQuOTYxNTZDNS4zMTUwMiA1LjYwMDEgNS42MDE1NiA1LjMxMzU2IDUuNjAxNTYgNC45NjAxVjIuMjQwMUM1LjYwMTU2IDEuODg2NjQgNS4zMTUwMiAxLjYwMDEgNC45NjE1NiAxLjYwMDFaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00Ljk2MTU2IDEwLjM5OTlIMi4yNDE1NkMxLjg4ODEgMTAuMzk5OSAxLjYwMTU2IDEwLjY4NjQgMS42MDE1NiAxMS4wMzk5VjEzLjc1OTlDMS42MDE1NiAxNC4xMTM0IDEuODg4MSAxNC4zOTk5IDIuMjQxNTYgMTQuMzk5OUg0Ljk2MTU2QzUuMzE1MDIgMTQuMzk5OSA1LjYwMTU2IDE0LjExMzQgNS42MDE1NiAxMy43NTk5VjExLjAzOTlDNS42MDE1NiAxMC42ODY0IDUuMzE1MDIgMTAuMzk5OSA0Ljk2MTU2IDEwLjM5OTlaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik0xMy43NTg0IDEuNjAwMUgxMS4wMzg0QzEwLjY4NSAxLjYwMDEgMTAuMzk4NCAxLjg4NjY0IDEwLjM5ODQgMi4yNDAxVjQuOTYwMUMxMC4zOTg0IDUuMzEzNTYgMTAuNjg1IDUuNjAwMSAxMS4wMzg0IDUuNjAwMUgxMy43NTg0QzE0LjExMTkgNS42MDAxIDE0LjM5ODQgNS4zMTM1NiAxNC4zOTg0IDQuOTYwMVYyLjI0MDFDMTQuMzk4NCAxLjg4NjY0IDE0LjExMTkgMS42MDAxIDEzLjc1ODQgMS42MDAxWiIgZmlsbD0iI2ZmZiIvPgo8cGF0aCBkPSJNNCAxMkwxMiA0TDQgMTJaIiBmaWxsPSIjZmZmIi8%2BCjxwYXRoIGQ9Ik00IDEyTDEyIDQiIHN0cm9rZT0iI2ZmZiIgc3Ryb2tlLXdpZHRoPSIxLjUiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIvPgo8L3N2Zz4K&logoColor=ffffff)](https://zread.ai/cmliu/edgetunnel)
-[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/cmliu/edgetunnel)
+本仓库 fork 自 [cmliu/edgetunnel](https://github.com/cmliu/edgetunnel)（AGPL-3.0 开源，
+上游版权与免责条款见原文），在其基础上针对 **个人自用 + OpenClash + Cloudflare 免费计划**
+场景做了两项关键改造，并提供一个极简替代版 Worker。
+
+> 仅供个人学习研究使用，请遵守当地法律法规与 Cloudflare 服务条款。
 
 ---
 
-## 📖 项目简介
+## 为什么需要这个版本？
 
-**edgetunnel** 是一个基于 CF Workers/Pages 平台的边缘计算隧道解密方案。它能够高效地处理网络流量，并提供强大的管理面板和灵活的节点配置能力。
+上游全量版功能非常强大（admin 面板、KV、多协议、优选生成器……），但对"一个人挂个
+订阅在 OpenClash 上用"的场景，有两个绕不开的问题：
 
-- 🖥️ **Demo 演示站点**：[https://EDT-Pages.github.io/admin](https://EDT-Pages.github.io/admin)
+1. **第三方依赖 = 信息泄漏**：`?clash` 订阅会把你的 **域名 + 当日订阅 TOKEN** 发给
+   公共转换服务（SUBAPI.cmliussss.net）；不配 `PROXYIP` 时兜底反代也指向作者的服务。
+2. **免费计划 CPU 墙**：全量版隧道热路径较重，大文件下载（`brew upgrade` 等）
+   几十秒即触发 CF 免费计划单请求 CPU 上限 → 会话被杀、下载中途断流
+   （实测 24 小时可收到 100+ 次超限告警）。
 
-### ✨ 核心特性
+## 本仓库提供什么
 
-- 🛡️ **协议支持**：支持 VLESS、Trojan、Shadowsocks 等主流协议，深度集成加密传输。
-- 📊 **管理面板**：内置可视化后台，支持实时配置修改、日志查看及流量统计。
-- 🛠️ **部署灵活**：完整适配 CF Workers 及 CF Pages (GitHub / 上传)。
-- 🔄 **订阅系统**：内置自动订阅生成及混淆转换，适配主流客户端（Clash, Sing-box, Surge 等）。
-- ⚡ **性能加速**：支持自定义 ProxyIP、SOCKS5/HTTP 链式代理及优选 API，优化网络延迟。
-- 🌐 **多台适配**：完美适配 Windows, Android, iOS, MacOS 及各种软路由固件。
+| 文件 | 是什么 | 适合谁 |
+|---|---|---|
+| **`et-lite.js`** ⭐推荐 | 极简 Worker（~370 行）：只保留 VLESS+WS 隧道、本地订阅生成、落地页 | 单人自用、OpenClash、在意 CPU 超限/第三方依赖的人 |
+| `_worker.js` | 上游最新版 + **本地 Clash YAML 补丁**（`?clash` 不再请求 SUBAPI） | 需要 admin 面板/多协议/完整功能的人 |
+| `patches/` | 补丁文件、迁移文档、测速脚本、回归测试 | 二者皆可 |
 
----
+旧版（混淆产物 + 明文备份）保留在分支 `backup/legacy-20250830`。
 
-## 💡 快速部署
->[!TIP]
-> 📖 **详尽图文教程**：[edgetunnel 部署指南](https://cmliussss.com/p/edt2/)
+## et-lite 与上游全量版的差异
 
->[!WARNING]
-> ⚠️ **Error 1101问题**：[视频解析](https://www.youtube.com/watch?v=r4uVTEJptdE)
+| | 全量版 | et-lite |
+|---|---|---|
+| 代码量 | 5.1 MB / 33k 行 | ~17 KB |
+| 订阅链路 | 默认经 SUBAPI 转换（泄漏域名+TOKEN） | **纯本地生成** `&clash` YAML / `&b64`，零第三方 |
+| 反代 | 默认兜底指向作者 ProxyIP 服务 | **纯直连**；`PROXYIP` 可选自配 |
+| 优选 IP | 每次订阅拉 GitHub CIDR | 你自测的 `ADD` 环境变量（附测速脚本） |
+| 大文件 CPU | Grain 多层队列 | 32KB 合包 + 单次拷贝，帧数降 8 倍 |
+| 特征码防护 | 字符串拆分/atob | 同等拆分（明文 0 处敏感词） |
+| admin 面板 / KV / XHTTP / gRPC / trojan / ss / ECH / TLS分片 / UDP / TG / 测速API | ✅ | ❌（有意删除，见取舍） |
+| TOKEN 算法 | MD5MD5(host+userID) | **一致**，订阅地址可直接迁移 |
 
-### ⚙️ Workers 部署
+**取舍**：lite 没有面板——改配置 = 改环境变量 + 重新部署；不支持 UDP/DNS 隧道
+（OpenClash fake-ip 模式下无感）。若你需要多协议、多用户或可视化后台，请用本仓库的
+`_worker.js`（含 Clash 本地补丁），或直接用上游。
 
-<details>
-<summary><code><strong>「 Workers 部署文字教程 」</strong></code></summary>
+## 快速开始（et-lite）
 
-1. 部署 CF Worker：
-   - 在 CF Worker 控制台中创建一个新的 Worker。
-   - 将 [worker.js](https://github.com/cmliu/edgetunnel/blob/main/_worker.js) 的内容粘贴到 Worker 编辑器中。
-   - 在左侧的 `设置`选项卡中，选择 `变量` > `添加变量`。
-     变量名称填写**ADMIN**，值则为你的管理员密码，后点击 `保存`即可。
+1. **部署**：CF Workers 新建/编辑 Worker → 粘贴 [`et-lite.js`](./et-lite.js) → 部署，
+   绑定自定义域名。
+2. **环境变量**：
 
-2. 绑定 KV 命名空间：
-   - 在 `绑定`选项卡中选择 `添加绑定 +` > `KV 命名空间` > `添加绑定`，然后选择一个已有的命名空间或创建一个新的命名空间进行绑定。
-   - `变量名称`填写**KV**，然后点击 `添加绑定`即可。
-
-3. 给 Workers绑定 自定义域： 
-   - 在 workers控制台的 `触发器`选项卡，下方点击 `添加自定义域`。
-   - 填入你已转入 CF 域名解析服务的次级域名，例如:`vless.google.com`后 点击`添加自定义域`，等待证书生效即可。
-
-4. 访问后台：
-   - 访问 `https://vless.google.com/admin` 输入管理员密码即可登录后台。
-
-</details>
-
-### 🛠 Pages 上传 部署方法 **最佳推荐!!!** [图文教程](https://cmliussss.com/p/edt2/)
-
-<details>
-<summary><code><strong>「 Pages 上传文件部署文字教程 」</strong></code></summary>
-
-1. 部署 CF Pages：
-   - 下载 [main.zip](https://github.com/cmliu/edgetunnel/archive/refs/heads/main.zip) 文件，并点上 Star !!!
-   - 在 CF Pages 控制台中选择 `上传资产`后，为你的项目取名后点击 `创建项目`，然后上传你下载好的 [main.zip](https://github.com/cmliu/edgetunnel/archive/refs/heads/main.zip) 文件后点击 `部署站点`。
-   - 部署完成后点击 `继续处理站点` 后，选择 `设置` > `环境变量` > **制作**为生产环境定义变量 > `添加变量`。
-     变量名称填写**ADMIN**，值则为你的管理员密码，后点击 `保存`即可。
-   - 返回 `部署` 选项卡，在右下角点击 `创建新部署` 后，重新上传 [main.zip](https://github.com/cmliu/edgetunnel/archive/refs/heads/main.zip) 文件后点击 `保存并部署` 即可。
-
-2. 绑定 KV 命名空间：
-   - 在 `设置`选项卡中选择 `绑定` > `+ 添加` > `KV 命名空间`，然后选择一个已有的命名空间或创建一个新的命名空间进行绑定。
-   - `变量名称`填写**KV**，然后点击 `保存`后重试部署即可。
-
-3. 给 Pages绑定 CNAME自定义域：[视频教程](https://www.youtube.com/watch?v=LeT4jQUh8ok&t=851s)
-   - 在 Pages控制台的 `自定义域`选项卡，下方点击 `设置自定义域`。
-   - 填入你的自定义次级域名，注意不要使用你的根域名，例如：
-     您分配到的域名是 `fuck.cloudns.biz`，则添加自定义域填入 `lizi.fuck.cloudns.biz`即可；
-   - 按照 CF 的要求将返回你的域名DNS服务商，添加 该自定义域 `lizi`的 CNAME记录 `edgetunnel.pages.dev` 后，点击 `激活域`即可。
-   
-4. 访问后台：
-   - 访问 `https://lizi.fuck.cloudns.biz/admin` 输入管理员密码即可登录后台。
-
-</details>
-
-### 🛠 Pages + GitHub 部署方法
-
-<details>
-<summary><code><strong>「 Pages + GitHub 部署文字教程 」</strong></code></summary>
-
-1. 部署 CF Pages：
-   - 在 Github 上先 Fork 本项目，并点上 Star !!!
-   - 在 CF Pages 控制台中选择 `连接到 Git`后，选中 `edgetunnel`项目后点击 `开始设置`。
-   - 在 `设置构建和部署`页面下方，选择 `环境变量（高级）`后并 `添加变量`
-     变量名称填写**ADMIN**，值则为你的管理员密码，后点击 `保存并部署`即可。
-
-2. 绑定 KV 命名空间：
-   - 在 `设置`选项卡中选择 `绑定` > `+ 添加` > `KV 命名空间`，然后选择一个已有的命名空间或创建一个新的命名空间进行绑定。
-   - `变量名称`填写**KV**，然后点击 `保存`后重试部署即可。
-
-3. 给 Pages绑定 CNAME自定义域：[视频教程](https://www.youtube.com/watch?v=LeT4jQUh8ok&t=851s)
-   - 在 Pages控制台的 `自定义域`选项卡，下方点击 `设置自定义域`。
-   - 填入你的自定义次级域名，注意不要使用你的根域名，例如：
-     您分配到的域名是 `fuck.cloudns.biz`，则添加自定义域填入 `lizi.fuck.cloudns.biz`即可；
-   - 按照 CF 的要求将返回你的域名DNS服务商，添加 该自定义域 `lizi`的 CNAME记录 `edgetunnel.pages.dev` 后，点击 `激活域`即可。
-
-4. 访问后台：
-   - 访问 `https://lizi.fuck.cloudns.biz/admin` 输入管理员密码即可登录后台。
-
-</details>
-
----
-
-## 🔑 环境变量说明
-
-| 变量名 | 必填 | 示例 | 详细备注 |
-| :--- | :---: | :--- | :--- |
-| **ADMIN** | ✅ | `123456` | 后台管理面板登录密码 |
-| **KEY** | ❌ | `CMLiussss` | 快速订阅路径密钥，访问 `/CMLiussss` 即可快速获取节点 |
-| **UUID** | ❌ | `90cd4a77-141a-43c9-991b-08263cfe9c10` | 强制固定UUID，只支持**UUIDv4**标准格式 |
-| **PROXYIP** | ❌ | `proxyip.cmliussss.net:443` | 全局自定义反代 IP  |
-| **URL** | ❌ | `https://cloudflare-error-page-3th.pages.dev` | 默认主页伪装地址（可填写网页 URL 或 `1101`） |
-| **GO2SOCKS5** | ❌ | `blog.cmliussss.com`,`*.ip111.cn`,`*google.com` | 强制走 SOCKS5 的名单 (`*` 为全局，域名用逗号分隔) |
-| **DEBUG** | ❌ | `1`或`true` | **开发者模式**，默认**关闭**调试日志功能（console.log），设置`1`或`true`则**开启**调试日志功能 |
-| **OFF_LOG** | ❌ | `1`或`true` | 默认**开启**KV日志记录功能，设置`1`或`true`则**关闭**日志记录功能 |
-| **BEST_SUB** | ❌ | `1`或`true` | 默认**关闭**作为**优选订阅生成器**的功能，设置`1`或`true`则**开启**该功能 |
-| **PRELOAD_RACE_DIAL** | ❌ | `1`或`true` | 默认**关闭**作为**预加载竞速拨号**的功能，设置`1`或`true`则**开启**该功能 |
-| **TCP_CONCURRENT_DIAL**   | ❌ | `2` | **TCP 并发拨号数**，默认值为`2`；设置后不再根据中国移动网络自动降为单路 |
-| **PROXY_CONCURRENT_DIAL** | ❌ | `1` | **反代并发拨号数**，默认值为`1`；数值越高连接速度越快，但 IP 切换也越频繁 |
-
----
-
-## 🔧 高级实用技巧
-如需修改 **订阅地址里的TOKEN** 和 **用于节点验证的UUID** ，可通过修改变量
-1. 修改`ADMIN`或`KEY`变量的值，可以随机修改 **订阅地址里的TOKEN** 和 **用于节点验证的UUID**
-2. 设置`UUID`变量可以强制固定 **订阅地址里的TOKEN** 和 **用于节点验证的UUID**，注意必须是**UUIDv4**标准格式，否则会导致节点无法使用。
-
-本工具支持通过 **PATH路径** 动态切换底层代理方案：
-
-- 指定 `PROXYIP` 案例
-   ```url
-   /proxyip=proxyip.cmliussss.net
-   /?proxyip=proxyip.cmliussss.net
+   ```
+   UUID    = 你的标准 UUIDv4（节点身份）
+   ADMIN   = 后台密码（不设 UUID 时参与推导，建议独立强随机）
+   KEY     = 强随机（务必设置，默认值公开在源码里）
+   ADD     = 可选，优选 IP 清单，见下
+   DEBUG   = 可选，true 输出隧道日志（wrangler tail 可见）
    ```
 
-- 指定 `SOCKS5` 案例
-   ```url
-   /socks5=user:password@127.0.0.1:1080
-   /?socks5=user:password@127.0.0.1:1080
-   /socks://dXNlcjpwYXNzd29yZA==@127.0.0.1:1080 (默认激活全局SOCKS5)
-   /socks5://user:password@127.0.0.1:1080 (默认激活全局SOCKS5)
+3. **优选 IP**（可选但推荐）：在 OpenClash 所在网络运行
+   [`patches/cf-bestip.sh`](./patches/cf-bestip.sh)：
+
+   ```sh
+   sh cf-bestip.sh 你的域名     # 输出最后一行整行复制进 ADD 环境变量
    ```
 
-- 指定 `HTTP代理` 案例
-   ```url
-   /http=user:password@127.0.0.1:1080
-   /http://user:password@127.0.0.1:8080 (默认激活全局SOCKS5)
+4. **OpenClash 订阅地址**：
+
+   ```
+   https://你的域名/sub?token=<TOKEN>&clash
    ```
 
-- 指定 `Trojan fallback` 案例（由于使用场景为自建对接, 仅 Trojan 入站，fallback 服务需为同密码、非 WebSocket、非 TLS. 此时 UDP 透传给 fallback, 性能优秀, 功能完整）
-   ```url
-   /trojan=1.1.1.1:1234
+   取消勾选"在线订阅转换"（Worker 直接返回成品 YAML）。
+   想要裸链接列表则用 `&b64`。TOKEN 用本地工具算出（纯离线，算法与 Worker 一致）：
+
+   ```sh
+   node patches/et-token.cjs 你的域名 --uuid <你的UUID>
+   # 或不设 UUID：node patches/et-token.cjs 你的域名 --admin <ADMIN> --key <KEY>
    ```
 
----
+5. **验证**：`curl -sk "https://域名/sub?token=<TOKEN>&clash" | head -5`
+   应看到 `# edgetunnel-lite ... 本地生成` 开头的 YAML。
 
-## 💻 客户端适配情况
+详细迁移说明、误区澄清（mihomo 没有 IP 库、PROXYIP 的真实用途）、CPU 预期：
+👉 [patches/LITE.md](./patches/LITE.md)
 
-| 平台 | 推荐客户端 |
-| :--- | :--- |
-| **Windows** | [v2rayN](https://github.com/2dust/v2rayN/releases)、[Hiddify](https://github.com/hiddify/hiddify-app/releases)、[FlClash](https://github.com/chen08209/FlClash/releases)、[mihomo-party](https://github.com/mihomo-party-org/clash-party/releases)、[Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev/releases)、[Clashmi](https://github.com/KaringX/clashmi/releases)、[FlyClash](https://github.com/GtxFury/FlyClash/releases)、[Karing](https://github.com/KaringX/karing/releases)、[Bettbox](https://github.com/appshubcc/Bettbox/releases) |
-| **Android** | [v2rayNG](https://github.com/2dust/v2rayNG/releases)、[ClashMetaForAndroid](https://github.com/MetaCubeX/ClashMetaForAndroid/releases/)、[FlClash](https://github.com/chen08209/FlClash/releases)、[Clashmi](https://github.com/KaringX/clashmi/releases)、[Hiddify](https://github.com/hiddify/hiddify-app/releases)、[NekoBox](https://github.com/MatsuriDayo/NekoBoxForAndroid/releases)、[FlyClash](https://github.com/GtxFury/FlyClash/releases)、[Karing](https://github.com/KaringX/karing/releases)、[Bettbox](https://github.com/appshubcc/Bettbox/releases) |
-| **iOS** | Surge、Shadowrocket、Stash、[Hiddify](https://github.com/hiddify/hiddify-app/releases)、Loon、Egern、[Clashmi](https://clashmi.app/download)、[Karing](https://karing.app/)、Quantumult X |
-| **macOS** | [FlClash](https://github.com/chen08209/FlClash/releases)、[mihomo-party](https://github.com/mihomo-party-org/clash-party/releases)、[Clash Verge Rev](https://github.com/clash-verge-rev/clash-verge-rev/releases)、Surge、[Clashmi](https://clashmi.app/download)、[Karing](https://karing.app/)、[FlyClash](https://github.com/GtxFury/FlyClash/releases) |
-| **鸿蒙** | [ClashBox](https://github.com/xiaobaigroup/ClashBox/releases) |
----
+## 全量版 + Clash 补丁的用法
 
-## ⭐ 项目热度
+适合保留完整功能但拒绝 SUBAPI 的人：部署 `_worker.js`（本仓库版本），订阅地址
+`/sub?token=<TOKEN>&clash` 即由 Worker 本地生成 Clash YAML。升级上游后重放补丁的
+步骤见 [patches/LOCAL-CLASH-YAML.md](./patches/LOCAL-CLASH-YAML.md)。
 
-![Stargazers over time](https://github.com/cmliu/cmliu/blob/main/star/edgetunnel.svg)
+## 测试与回归
 
----
+```sh
+node patches/test-lite.mjs        # et-lite：协议/订阅/隧道 E2E 25 项
+node patches/test-clash-yaml.mjs  # 全量版 Clash 补丁 11 项
+```
 
-## 🙏 特别鸣谢
-### 💖 赞助支持 - 提供云服务器维持[订阅转换服务](https://sub.cmliussss.net/)
-- [Yuusei Network](https://yuusei.io/)
-- [VMRack](https://www.vmrack.net?ref_code=5Zk7eNhbgL7)
+## 与上游同步
 
-### 🛠 开源代码引用
-- [zizifn/edgetunnel](https://github.com/zizifn/edgetunnel)
-- [3Kmfi6HP/EDtunnel](https://github.com/6Kmfi6HP/EDtunnel)
-- [SHIJS1999/cloudflare-worker-vless-ip](https://github.com/SHIJS1999/cloudflare-worker-vless-ip)
-- [Stanley-baby](https://github.com/Stanley-baby)
-- [ACL4SSR](https://github.com/ACL4SSR/ACL4SSR/tree/master/Clash/config)
-- [股神](https://t.me/CF_NAT/38889)
-- [Workers/Pages Metrics](https://t.me/zhetengsha/3382)
-- [白嫖哥](https://t.me/bestcfipas)
-- [Mingyu](https://github.com/ymyuuu/workers-vless)
-- [ToiCF/CF-Workers-HTTPS](https://github.com/ToiCF/CF-Workers-HTTPS)
-- [ToiCF/CF-Workers-TURN](https://github.com/ToiCF/CF-Workers-TURN)
-- [ToiCF/CF-Workers-SoftEther](https://github.com/ToiCF/CF-Workers-SoftEther)
-- [eooce](https://github.com/eooce/Cloudflare-proxy)
-- [Sukka](https://ip.skk.moe/)
-- [zhangtaile](https://github.com/cmliu/edgetunnel/pull/999)
-- [1345695](https://github.com/1345695/edcloudwasm)
-- [ToiCF/GrainTCP](https://github.com/ToiCF/GrainTCP)
-- [xream](https://github.com/cmliu/edgetunnel/pull/1359)
+```sh
+git fetch upstream && git rebase upstream/main
+# _worker.js 冲突时取上游新版，再按 patches/LOCAL-CLASH-YAML.md 重放
+```
 
----
+## 致谢与许可
 
-## ⚠️ 免责声明
-
-1. 本项目（"edgetunnel"）仅供**教育、科学研究及个人安全测试**之目的。
-2. 使用者在下载或使用本项目代码时，必须严格遵守所在地区的法律法规。
-3. 作者 **cmliu** 对任何滥用本项目代码导致的行为或后果均不承担任何责任。
-4. 本项目不对因使用代码引起的任何直接或间接损害负责。
-5. 建议在测试完成后 24 小时内删除本项目相关部署。
-
----
-
-**如果您觉得项目对您有帮助，请给一个 Star 🌟，这是对我最大的鼓励！**
+- 原始项目与主要功能：[cmliu/edgetunnel](https://github.com/cmliu/edgetunnel)（AGPL-3.0）
+- 本仓库的修改（et-lite、Clash 本地补丁、测速脚本）同样以 AGPL-3.0 开源
+- 上游的免责声明同样适用：本项目仅供教育、研究和安全测试目的
