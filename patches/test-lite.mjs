@@ -39,15 +39,15 @@ export function connect({ hostname, port }) {
 
 let src = readFileSync(path.join(HERE, '..', 'et-lite.js'), 'utf-8');
 src = src.replace(/import \{ connect \} from ('[^']*'|"[^"]*");/, `import { connect } from 'file://${mockFile}';`);
-src = src.replaceAll("crypto.subtle.digest('MD5', ", "globalThis.__md5digest(");
+if (src.includes("crypto.subtle.digest")) throw new Error('lite 不应再含 MD5 计算');
 // 注入 pair 捕获钩子（模块作用域变量无法经 import 访问，改为导出 setter）
 src = src.replace(
-	"let _uidCache = { key: '', id: null };",
-	"let _uidCache = { key: '', id: null };\nexport function __setPairSink(fn) { globalThis.__pairSink = fn; }");
+	"function text(body, status = 200) {",
+	"export function __setPairSink(fn) { globalThis.__pairSink = fn; }\nfunction text(body, status = 200) {");
 src = src.replace(
 	"const [client, server] = Object.values(new WebSocketPair());",
 	"const [client, server] = Object.values(new WebSocketPair());\n\tglobalThis.__pairSink && globalThis.__pairSink({ client, server });");
-src += '\nexport { 解析维列斯请求 as parseVless, uuidToBytes, 解码WS早期数据 as decodeEarlyData, MD5MD5, resolveUserID, handleSubscription };\n';
+src += '\nexport { 解析维列斯请求 as parseVless, uuidToBytes, 解码WS早期数据 as decodeEarlyData, resolveUserID, handleSubscription };\n';
 const mod = await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'));
 mod.__setPairSink(({ client, server }) => { LAST = { client, server }; });
 
@@ -137,12 +137,10 @@ A(mod.decodeEarlyData(eb64, mod.uuidToBytes(uuid))?.byteLength === hdr.byteLengt
 A(mod.decodeEarlyData('!!!!', mod.uuidToBytes(uuid)) === null, 'early data 非法→null');
 
 // ================= TOKEN / 身份 =================
-const refMD5MD5 = async (s) => { const h1 = md5(Buffer.from(s)).toString('hex'); return md5(Buffer.from(h1.slice(7, 27))).toString('hex'); };
-const expectToken = await refMD5MD5('et.example.com' + uuid);
-A((await mod.MD5MD5('et.example.com' + uuid)) === expectToken, 'MD5MD5 与全量版一致');
-A((await mod.resolveUserID(env)) === uuid, 'resolveUserID env.UUID');
-const adminID = await mod.resolveUserID({ ADMIN: 'test-admin', KEY: 'test-key' });
-A(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(adminID), 'resolveUserID ADMIN推导合法v4');
+A(mod.resolveUserID(env) === uuid, 'resolveUserID env.UUID');
+A(mod.resolveUserID({}) === '', '无 UUID → 空（拒绝服务）');
+A(mod.resolveUserID({ UUID: 'not-a-uuid' }) === '', '非法 UUID → 空');
+const expectToken = uuid; // TOKEN 直接 = UUID
 
 // ================= 订阅 =================
 const U = (q) => new URL('https://et.example.com/sub?token=' + expectToken + q);

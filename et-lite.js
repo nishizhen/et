@@ -13,11 +13,11 @@
 //   下行 remote.readable → 合包(≤32KB，0ms 定时器宏任务批处理) → server.send
 //   无 config_JSON/KV 读取、无每请求双重哈希
 //
-// 环境变量：
-//   UUID     节点 UUID（标准 v4，必填）。不设则 = MD5MD5(ADMIN+KEY) 推导，
-//            与全量版算法一致 → 现有订阅地址/TOKEN 原样可用
-//   ADMIN    仅当未设 UUID 时使用：推导种子（lite 无面板，设了 UUID 则不读取）
-//   KEY      仅当未设 UUID 时使用：推导盐（同上）
+// 环境变量（极简设计：一个 UUID 就是全部秘密）：
+//   UUID     节点 UUID（标准 v4，必填）。订阅 TOKEN 直接 = UUID，
+//            订阅地址 /sub?token=<UUID>&clash 无需任何计算。
+//            ⚠️ 订阅地址即隧道密钥：每次部署换新 UUID = 吊销全部旧链接，
+//            这是本设计下的标准轮换方式（换新后 OpenClash 重新导入一次订阅）。
 //   HOST     订阅/节点域名，默认取请求 Host
 //   ADD      附加优选节点 ip:port#备注，逗号/换行分隔
 //   PROXYIP  直连失败时的兜底反代（host 或 host:port，默认端口 80）
@@ -31,8 +31,7 @@ const 特征码 = {
 	协议: 'vl' + 'ess',
 	名称: 'edge' + 'tunnel-lite',
 };
-const Version = 'lite-2026-10-21';
-const DEFAULT_KEY = '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改';
+const Version = 'lite-2026-10-21b';
 const 合包目标 = 32 * 1024;        // 下行合包目标（与全量版 Grain 包大小一致）
 const 队列上限 = 8 * 1024 * 1024;  // 上行缓冲上限，超限断链防内存堆积
 
@@ -50,30 +49,12 @@ export default {
 };
 
 // ---------------------------------------------------------------------------
-// 身份与 TOKEN（与全量版算法一致，跨实例缓存，热路径 0 哈希）
+// 身份：UUID 即节点凭证，也即订阅 TOKEN（零计算、零推导）
 // ---------------------------------------------------------------------------
-async function MD5MD5(文本) {
-	const enc = new TextEncoder();
-	const h1 = [...new Uint8Array(await crypto.subtle.digest('MD5', enc.encode(文本)))]
-		.map(b => b.toString(16).padStart(2, '0')).join('');
-	const h2 = [...new Uint8Array(await crypto.subtle.digest('MD5', enc.encode(h1.slice(7, 27))))]
-		.map(b => b.toString(16).padStart(2, '0')).join('');
-	return h2.toLowerCase();
-}
-
 const uuidRegex = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-4[0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$/;
-let _uidCache = { key: '', id: null };
 
-async function resolveUserID(env) {
-	if (env.UUID && uuidRegex.test(env.UUID)) return env.UUID.toLowerCase();
-	const admin = env.ADMIN || env.PASSWORD || env.TOKEN || env.KEY;
-	if (!admin) return '';
-	const cacheKey = `${admin}|${env.KEY || DEFAULT_KEY}`;
-	if (_uidCache.key === cacheKey && _uidCache.id) return _uidCache.id;
-	const m = await MD5MD5(admin + (env.KEY || DEFAULT_KEY));
-	const id = `${m.slice(0, 8)}-${m.slice(8, 12)}-4${m.slice(13, 16)}-8${m.slice(17, 20)}-${m.slice(20)}`;
-	_uidCache = { key: cacheKey, id };
-	return id;
+function resolveUserID(env) {
+	return (env.UUID && uuidRegex.test(env.UUID)) ? env.UUID.toLowerCase() : '';
 }
 
 function text(body, status = 200) {
@@ -156,7 +137,7 @@ function makeConnector(request) {
 // 隧道：认证后双向 pipeTo 原生直通
 // ---------------------------------------------------------------------------
 async function handleTunnel(request, env) {
-	const userID = await resolveUserID(env);
+	const userID = resolveUserID(env);
 	const uuidBytes = userID ? uuidToBytes(userID) : null;
 	const debug = ['1', 'true'].includes(String(env.DEBUG || ''));
 	const log = (...a) => { if (debug) console.log(...a); };
@@ -306,11 +287,10 @@ function parseAddList(add) {
 }
 
 async function handleSubscription(request, url, env) {
-	const userID = await resolveUserID(env);
-	if (!userID) return text('请设置 UUID 或 ADMIN 环境变量', 404);
+	const userID = resolveUserID(env);
+	if (!userID) return text('请设置 UUID 环境变量', 404);
 	const host = (env.HOST || url.hostname || '').toLowerCase();
-	const token = await MD5MD5(host + userID);
-	if (url.searchParams.get('token') !== token) return new Response(LANDING, { headers: { 'content-type': 'text/html; charset=utf-8' } });
+	if (url.searchParams.get('token') !== userID) return new Response(LANDING, { headers: { 'content-type': 'text/html; charset=utf-8' } });
 
 	const path = env.PATH || '/';
 	const nodes = [{ addr: host, port: 443, remark: '主节点' }].concat(parseAddList(env.ADD));

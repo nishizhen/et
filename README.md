@@ -35,12 +35,12 @@
 |---|---|---|
 | 代码量 | 5.1 MB / 33k 行 | ~17 KB |
 | 订阅链路 | 默认经 SUBAPI 转换（泄漏域名+TOKEN） | **纯本地生成** `&clash` YAML / `&b64`，零第三方 |
+| 身份体系 | UUID + ADMIN + KEY + MD5 推导 TOKEN | **仅一个 UUID**（= 节点身份 = 订阅 TOKEN），换 UUID 即轮换密钥 |
 | 反代 | 默认兜底指向作者 ProxyIP 服务 | **纯直连**；`PROXYIP` 可选自配 |
 | 优选 IP | 每次订阅拉 GitHub CIDR | 你自测的 `ADD` 环境变量（附测速脚本） |
 | 大文件 CPU | Grain 多层队列 | 32KB 合包 + 单次拷贝，帧数降 8 倍 |
 | 特征码防护 | 字符串拆分/atob | 同等拆分（明文 0 处敏感词） |
 | admin 面板 / KV / XHTTP / gRPC / trojan / ss / ECH / TLS分片 / UDP / TG / 测速API | ✅ | ❌（有意删除，见取舍） |
-| TOKEN 算法 | MD5MD5(host+userID) | **一致**，订阅地址可直接迁移 |
 
 **取舍**：lite 没有面板——改配置 = 改环境变量 + 重新部署；不支持 UDP/DNS 隧道
 （OpenClash fake-ip 模式下无感）。若你需要多协议、多用户或可视化后台，请用本仓库的
@@ -53,14 +53,16 @@
 2. **环境变量**：
 
    ```
-   UUID    = 你的标准 UUIDv4（节点身份，必填）
+   UUID    = 你的标准 UUIDv4（必填，节点身份 + 订阅 TOKEN 二合一）
    ADD     = 可选，优选 IP 清单，见下
    DEBUG   = 可选，true 输出隧道日志（wrangler tail 可见）
    ```
 
-   > lite 没有 admin 面板。`ADMIN`/`KEY` 仅在**不设置 UUID** 时用于推导节点身份
-   > （`MD5MD5(ADMIN+KEY)`，与全量版算法一致）；设置了 UUID 后二者不被读取，可不配。
-   > 若你还要在同域名上回退使用全量版 `_worker.js`，请保留它们以免身份/TOKEN 变化。
+   > **lite 没有 admin 面板，也没有 ADMIN/KEY/TOKEN 计算**——一个 UUID 就是全部秘密。
+   > 生成：`uuidgen`（macOS/Linux）或任意 UUID v4 生成器。
+   > ⚠️ **订阅地址即隧道密钥**（TOKEN=UUID 直接可见）：怀疑泄露或例行轮换时，
+   > **每次部署换一个新生成的 UUID 即可吊销全部旧订阅链接**，之后 OpenClash
+   > 重新导入一次新地址。这是本设计下的标准轮换方式。
 
 3. **优选 IP**（可选但推荐）：在 OpenClash 所在网络运行
    [`patches/cf-bestip.sh`](./patches/cf-bestip.sh)：
@@ -69,22 +71,20 @@
    sh cf-bestip.sh 你的域名     # 输出最后一行整行复制进 ADD 环境变量
    ```
 
-4. **OpenClash 订阅地址**：
+4. **OpenClash 订阅地址**（TOKEN 就是你的 UUID，无需计算）：
 
    ```
-   https://你的域名/sub?token=<TOKEN>&clash
+   https://你的域名/sub?token=<你的UUID>&clash
    ```
 
    取消勾选"在线订阅转换"（Worker 直接返回成品 YAML）。
-   想要裸链接列表则用 `&b64`。TOKEN 用本地工具算出（纯离线，算法与 Worker 一致）：
+   想要裸链接列表则用 `&b64`。
 
-   ```sh
-   node patches/et-token.cjs 你的域名 --uuid <你的UUID>
-   # 或不设 UUID：node patches/et-token.cjs 你的域名 --admin <ADMIN> --key <KEY>
-   ```
-
-5. **验证**：`curl -sk "https://域名/sub?token=<TOKEN>&clash" | head -5`
+5. **验证**：`curl -sk "https://域名/sub?token=<UUID>&clash" | head -5`
    应看到 `# edgetunnel-lite ... 本地生成` 开头的 YAML。
+
+⚠️ lite 与全量版**身份算法不同**（全量版 TOKEN=MD5MD5(域名+UUID)，lite TOKEN=UUID），
+两者订阅地址互不通用；从 lite 换回全量版需重新生成订阅链接。
 
 详细迁移说明、误区澄清（mihomo 没有 IP 库、PROXYIP 的真实用途）、CPU 预期：
 👉 [patches/LITE.md](./patches/LITE.md)
@@ -92,8 +92,9 @@
 ## 全量版 + Clash 补丁的用法
 
 适合保留完整功能但拒绝 SUBAPI 的人：部署 `_worker.js`（本仓库版本），订阅地址
-`/sub?token=<TOKEN>&clash` 即由 Worker 本地生成 Clash YAML。升级上游后重放补丁的
-步骤见 [patches/LOCAL-CLASH-YAML.md](./patches/LOCAL-CLASH-YAML.md)。
+`/sub?token=<TOKEN>&clash` 即由 Worker 本地生成 Clash YAML（全量版 TOKEN 仍需
+计算：`node patches/et-token.cjs 域名 --uuid <UUID>`）。升级上游后重放补丁的步骤见
+[patches/LOCAL-CLASH-YAML.md](./patches/LOCAL-CLASH-YAML.md)。
 
 ## 测试与回归
 
