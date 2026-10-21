@@ -38,7 +38,7 @@ export function connect({ hostname, port }) {
 `);
 
 let src = readFileSync(path.join(HERE, '..', 'et-lite.js'), 'utf-8');
-src = src.replace("import { connect } from 'cloudflare:sockets';", `import { connect } from 'file://${mockFile}';`);
+src = src.replace(/import \{ connect \} from ('[^']*'|"[^"]*");/, `import { connect } from 'file://${mockFile}';`);
 src = src.replaceAll("crypto.subtle.digest('MD5', ", "globalThis.__md5digest(");
 // 注入 pair 捕获钩子（模块作用域变量无法经 import 访问，改为导出 setter）
 src = src.replace(
@@ -47,7 +47,7 @@ src = src.replace(
 src = src.replace(
 	"const [client, server] = Object.values(new WebSocketPair());",
 	"const [client, server] = Object.values(new WebSocketPair());\n\tglobalThis.__pairSink && globalThis.__pairSink({ client, server });");
-src += '\nexport { parseVless, uuidToBytes, decodeEarlyData, MD5MD5, resolveUserID, handleSubscription };\n';
+src += '\nexport { 解析维列斯请求 as parseVless, uuidToBytes, 解码WS早期数据 as decodeEarlyData, MD5MD5, resolveUserID, handleSubscription };\n';
 const mod = await import('data:text/javascript;base64,' + Buffer.from(src).toString('base64'));
 mod.__setPairSink(({ client, server }) => { LAST = { client, server }; });
 

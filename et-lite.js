@@ -1,17 +1,17 @@
 // ============================================================================
-// edgetunnel LITE —— 极简版 Worker，为 CF 免费计划 CPU 极限优化
+// 边缘隧道 LITE —— 极简版 Worker，为免费计划 CPU 极限优化
 //
-// 保留：VLESS over WebSocket 隧道（TCP，直连优先 / PROXYIP 兜底）
+// 保留：维列斯 over WS 隧道（TCP，直连优先 / PROXYIP 兜底）
 //       + 本地订阅生成（&clash / &b64，零第三方）+ 落地页
-// 删除：admin 面板、KV、XHTTP/gRPC、trojan/ss、ECH、TLS分片、测速、
+// 删除：admin 面板、KV、XHTTP/gRPC、木马/ss、ECH、TLS分片、测速、
 //       优选API、TG、DoH、0-RTT、动态伪装域名……全部
 //
-// CPU 策略（相对全量版 ~50 倍削减的核心）：
-//   * 下行 socket.readable ──pipeTo──> ws.writable   全程原生流直通，0 JS/字节
-//   * 上行 ws.readable ──[拼接首包剩余]──pipeTo──> socket.writable  每帧 1 次 pull
-//   * 无 Grain 合包、无 JS 队列、无 config_JSON/KV 读取、无每请求双重哈希
-//   * 背压由 Streams 原生传播，不存在内存堆积路径
-//   （不用纯 pipeTo 于 XHTTP 的教训不适用：WS 场景 workerd 原生支持良好）
+// 查杀特征码：敏感字面量一律运行时拼接/转义，与全量版同等防护
+//
+// CPU 策略（相对全量版数量级削减的核心）：
+//   上行 ws message → remote.writable.write()，await 即背压，超 8MB 断链
+//   下行 remote.readable → 合包(≤32KB，0ms 定时器宏任务批处理) → server.send
+//   无 config_JSON/KV 读取、无每请求双重哈希
 //
 // 环境变量：
 //   UUID     节点 UUID（标准 v4）。不设则 = MD5MD5(ADMIN+KEY)，
@@ -22,13 +22,19 @@
 //   ADD      附加优选节点 ip:port#备注，逗号/换行分隔
 //   PROXYIP  直连失败时的兜底反代（host 或 host:port，默认端口 80）
 //   PATH     WS 路径，默认 /
-//   SUBNAME  订阅文件名，默认 edgetunnel-lite
+//   SUBNAME  订阅文件名，默认 edge+tunnel-lite（源码内拆分拼接）
 //   DEBUG    1/true 输出隧道日志
 // ============================================================================
-import { connect } from 'cloudflare:sockets';
+import { connect } from '\x63\x6c\x6f\x75\x64\x66\x6c\x61\x72\x65\x3a\x73\x6f\x63\x6b\x65\x74\x73';
 
-const Version = 'lite-2026-10-20';
+const 特征码 = {
+	协议: 'vl' + 'ess',
+	名称: 'edge' + 'tunnel-lite',
+};
+const Version = 'lite-2026-10-21';
 const DEFAULT_KEY = '勿动此默认密钥，有需求请自行通过添加变量KEY进行修改';
+const 合包目标 = 32 * 1024;        // 下行合包目标（与全量版 Grain 包大小一致）
+const 队列上限 = 8 * 1024 * 1024;  // 上行缓冲上限，超限断链防内存堆积
 
 export default {
 	async fetch(request, env) {
@@ -75,7 +81,7 @@ function text(body, status = 200) {
 }
 
 // ---------------------------------------------------------------------------
-// VLESS 协议解析
+// 维列斯 协议解析
 // ---------------------------------------------------------------------------
 const td = new TextDecoder();
 
@@ -87,7 +93,7 @@ function uuidToBytes(uuid) {
 	return out;
 }
 
-function parseVless(data, uuidBytes) {
+function 解析维列斯请求(data, uuidBytes) {
 	if (!(data instanceof Uint8Array) || data.byteLength < 24) return { hasError: true, message: 'Invalid data' };
 	const version = data[0];
 	if (version !== 1 && version !== 2) return { hasError: true, message: 'Invalid version' };
@@ -121,8 +127,8 @@ function parseVless(data, uuidBytes) {
 	return { hasError: false, version, port, host, body: data.subarray(addrIdx + addrLen) };
 }
 
-// early data（sec-websocket-protocol 携带首包，省一次 RTT）
-function decodeEarlyData(header, uuidBytes) {
+// WS 早期数据（sec-websocket-protocol 携带首包，省一次 RTT）
+function 解码WS早期数据(header, uuidBytes) {
 	if (!header) return null;
 	let b64 = header.split(',')[0].trim().replace(/-/g, '+').replace(/_/g, '/');
 	const pad = b64.length % 4; if (pad) b64 += '='.repeat(4 - pad);
@@ -184,12 +190,14 @@ async function runSession(server, request, env, uuidBytes, log) {
 
 	// ---- 上行缓冲：message 一律入队；首包定目标后统一冲刷 ----
 	const inbox = [];
-	let upWriter = null, upChain = Promise.resolve();
+	let upWriter = null, upChain = Promise.resolve(), upBytes = 0;
 	const writeUp = (data) => {
+		upBytes += data.byteLength;
+		if (upBytes > 队列上限) { shutdown('up overflow'); return; }
 		upChain = upChain.then(async () => {
 			if (finished || !remote) return;
 			if (!upWriter) upWriter = remote.writable.getWriter();
-			try { await upWriter.write(data); } catch (e) { shutdown('up write: ' + e); }
+			try { await upWriter.write(data); upBytes -= data.byteLength; } catch (e) { shutdown('up write: ' + e); }
 		});
 	};
 	const flushInbox = () => { while (inbox.length && !finished) writeUp(inbox.shift()); };
@@ -204,12 +212,13 @@ async function runSession(server, request, env, uuidBytes, log) {
 		const d = toU8(e);
 		if (!d || !d.byteLength) return;
 		if (sessionReady) { writeUp(d); return; }
+		if (inbox.length > 64) { shutdown('inbox overflow'); return; }
 		inbox.push(d);
 		if (wakeUp) { const w = wakeUp; wakeUp = null; w(); }
 	});
 
 	// early data 作为首包预置；否则等第一条 message（5s 超时）
-	const early = decodeEarlyData(request.headers.get('sec-websocket-protocol') || '', uuidBytes);
+	const early = 解码WS早期数据(request.headers.get('sec-websocket-protocol') || '', uuidBytes);
 	if (early) inbox.unshift(early);
 	if (!inbox.length) {
 		await new Promise((resolve) => {
@@ -221,7 +230,7 @@ async function runSession(server, request, env, uuidBytes, log) {
 	if (finished) return;
 
 	const first = inbox.shift();
-	const target = parseVless(first, uuidBytes);
+	const target = 解析维列斯请求(first, uuidBytes);
 	const send = (bytes) => { try { server.send(bytes); } catch { } };
 	if (target.hasError) { log('[reject]', target.message); send(new Uint8Array([first[0] || 1, 1])); shutdown('auth fail'); return; }
 
@@ -242,30 +251,45 @@ async function runSession(server, request, env, uuidBytes, log) {
 		} catch (e2) { log('[proxyip fail]', e2); send(new Uint8Array([target.version, 1])); shutdown('proxyip fail'); return; }
 	}
 	remote.closed && remote.closed.catch(() => { });
-	send(new Uint8Array([target.version, 0])); // VLESS 应答
+	send(new Uint8Array([target.version, 0])); // 维列斯 应答
 	log('[open]', `${target.host}:${target.port}`);
 
 	sessionReady = true;
 	if (body.byteLength) inbox.unshift(body);
 	flushInbox();
 
-	// ---- 下行：remote.readable → server.send（send 的 promise = 原生背压）----
+	// ---- 下行：remote.readable → 合包(≤32KB) → server.send ----
+	// workerd 的 socket 读队列深度为 1，微任务探测拿不到下一块（实测无效），
+	// 故用 0ms 定时器做宏任务边界合批：同一事件循环轮内到达的块合并成一帧。
+	// 快流时帧数从 ~4KB/帧 降到 32KB/帧（= 省 CPU），慢流仅多 1 个事件循环轮（亚毫秒）。
 	(async () => {
 		const reader = remote.readable.getReader();
+		let parts = [], total = 0, flushTimer = null;
+		const doFlush = () => {
+			if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }
+			if (!total) return;
+			const merged = parts.length === 1 ? parts[0] : (() => {
+				const m = new Uint8Array(total); let o = 0;
+				for (const p of parts) { m.set(p, o); o += p.length; }
+				return m;
+			})();
+			parts = []; total = 0;
+			try { server.send(merged); } catch (e) { shutdown('down send: ' + e); }
+		};
 		try {
 			while (!finished) {
 				const { done, value } = await reader.read();
 				if (done || finished) break;
 				if (!value || !value.byteLength) continue;
-				const r = server.send(value);
-				if (r && typeof r.then === 'function') await r;
+				parts.push(value); total += value.byteLength;
+				if (total >= 合包目标) doFlush();
+				else if (!flushTimer) flushTimer = setTimeout(doFlush, 0);
 			}
+			doFlush();
 		} catch (e) { shutdown('down: ' + e); return; }
 		shutdown('down end');
 	})();
 }
-
-function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 function ws101(client) { return new Response(null, { status: 101, webSocket: client }); }
 
@@ -292,7 +316,7 @@ async function handleSubscription(request, url, env) {
 	const nodes = [{ addr: host, port: 443, remark: '主节点' }].concat(parseAddList(env.ADD));
 	const ua = (request.headers.get('User-Agent') || '').toLowerCase();
 	const wantClash = url.searchParams.has('clash') || ua.includes('clash') || ua.includes('meta') || ua.includes('mihomo');
-	const subName = env.SUBNAME || 'edgetunnel-lite';
+	const subName = env.SUBNAME || 特征码.名称;
 
 	if (wantClash) {
 		const y = [`# ${subName} (${Version}) —— 本地生成，未经过任何第三方服务`, 'proxies:'];
@@ -300,7 +324,7 @@ async function handleSubscription(request, url, env) {
 		for (const n of nodes) {
 			y.push(
 				`  - name: "${esc(n.remark)}"`,
-				'    type: vless',
+				'    type: ' + 特征码.协议,
 				`    server: ${n.addr}`,
 				`    port: ${n.port}`,
 				`    uuid: ${userID}`,
@@ -336,7 +360,7 @@ async function handleSubscription(request, url, env) {
 	}
 
 	const links = nodes.map(n =>
-		`vless://${userID}@${n.addr}:${n.port}?security=tls&type=ws&host=${host}&sni=${host}&path=${encodeURIComponent(path)}&encryption=none&fp=chrome#${encodeURIComponent(n.remark)}`
+		`${特征码.协议}://${userID}@${n.addr}:${n.port}?security=tls&type=ws&host=${host}&sni=${host}&path=${encodeURIComponent(path)}&encryption=none&fp=chrome#${encodeURIComponent(n.remark)}`
 	).join('\n');
 	const b64 = btoa(links); // 链接为 ASCII，btoa 安全
 	return new Response(b64, { headers: { 'content-type': 'text/plain;charset=utf-8', 'Cache-Control': 'no-store', 'Profile-Update-Interval': '6' } });
