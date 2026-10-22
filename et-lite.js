@@ -31,7 +31,7 @@ const 特征码 = {
 	协议: 'vl' + 'ess',
 	名称: 'edge' + 'tunnel-lite',
 };
-const Version = 'lite-2026-10-21c';
+const Version = 'lite-2026-10-22';
 const 合包目标 = 32 * 1024;        // 下行合包目标（与全量版 Grain 包大小一致）
 const 队列上限 = 8 * 1024 * 1024;  // 上行缓冲上限，超限断链防内存堆积
 
@@ -44,7 +44,8 @@ export default {
 		if (url.pathname === '/sub') return handleSubscription(request, url, env);
 		if (url.pathname === '/version') return text(`${Version}\n`);
 		if (url.pathname === '/robots.txt') return text('User-agent: *\nDisallow: /\n');
-		return new Response(LANDING, { headers: { 'content-type': 'text/html; charset=utf-8', 'Cache-Control': 'public, max-age=3600' } });
+		// no-store：落地页若被 CF 边缘缓存，WS Upgrade 请求可能命中缓存的 200 页
+		return new Response(LANDING, { headers: { 'content-type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' } });
 	},
 };
 

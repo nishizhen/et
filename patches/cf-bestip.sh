@@ -72,7 +72,7 @@ for _ip in $IPS; do
 			-w "%{time_appconnect} %{http_code} %{time_total}" \
 			--resolve "$DOMAIN:$PORT:$_ip" "https://$DOMAIN:$PORT/version" 2>/dev/null)
 		[ -n "$_o" ] && echo "$_o $_ip" > "$TMPD/r$_k"
-		_c=$(curl -sk -o /dev/null -m 8 --connect-timeout 6 \
+		_c=$(curl -sk --http1.1 -o /dev/null -m 8 --connect-timeout 6 \
 			-H "Upgrade: websocket" -H "Connection: Upgrade" \
 			-H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
 			-w "%{http_code}" --resolve "$DOMAIN:$PORT:$_ip" "https://$DOMAIN:$PORT/" 2>/dev/null)
@@ -102,7 +102,7 @@ if [ "$_have" -lt "$TOP" ]; then
 			-w "%{time_appconnect} %{http_code} %{time_total}" \
 			--resolve "$DOMAIN:$PORT:$_ip" "https://$DOMAIN:$PORT/version" 2>/dev/null)
 		case "$_o" in *" 200 "*) ;; *) continue ;; esac
-		_c=$(curl -sk -o /dev/null -m 10 \
+		_c=$(curl -sk --http1.1 -o /dev/null -m 10 \
 			-H "Upgrade: websocket" -H "Connection: Upgrade" \
 			-H "Sec-WebSocket-Version: 13" -H "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==" \
 			-w "%{http_code}" --resolve "$DOMAIN:$PORT:$_ip" "https://$DOMAIN:$PORT/" 2>/dev/null)
