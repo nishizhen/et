@@ -31,7 +31,7 @@ const 特征码 = {
 	协议: 'vl' + 'ess',
 	名称: 'edge' + 'tunnel-lite',
 };
-const Version = 'lite-2026-10-22';
+const Version = 'lite-2026-10-23';
 const 合包目标 = 32 * 1024;        // 下行合包目标（与全量版 Grain 包大小一致）
 const 队列上限 = 8 * 1024 * 1024;  // 上行缓冲上限，超限断链防内存堆积
 
@@ -147,6 +147,10 @@ async function handleTunnel(request, env) {
 	// 约定与全量版一致：Object.values 顺序 = [client, server]
 	const [client, server] = Object.values(new WebSocketPair());
 	server.accept();
+	// workerd 的 WS 服务端 binaryType 默认 "blob"（websocket_standard_binary_type 兼容标志开启时），
+	// 二进制帧的 e.data 是 Blob 而非 ArrayBuffer/Uint8Array，instanceof 检查会全部落空。
+	// 全量版同样显式设置（_worker.js L1301），lite 漏掉导致首包被静默丢弃 → no first packet。
+	server.binaryType = 'arraybuffer';
 	// workerd：服务端 WS 只有事件 API（message/send/close），没有 .readable/.writable。
 	// 会话逻辑放后台执行，fetch 立即返回 101。
 	runSession(server, request, env, uuidBytes, log).catch((e) => {
@@ -188,11 +192,18 @@ async function runSession(server, request, env, uuidBytes, log) {
 	const toU8 = (e) => e.data instanceof Uint8Array ? e.data
 		: e.data instanceof ArrayBuffer ? new Uint8Array(e.data)
 			: typeof e.data === 'string' ? new TextEncoder().encode(e.data) : null;
+	// Blob 判定：workerd 在 websocket_standard_binary_type 兼容标志下，binaryType 默认 "blob"，
+	// 二进制帧的 e.data 是 Blob（有 arrayBuffer() 方法、无 byteLength 属性）。
+	// 已显式设置 binaryType='arraybuffer'，但此处做防御性兜底，防止兼容日期差异导致消息被静默丢弃。
+	const isBlobLike = (d) => d && typeof d.arrayBuffer === 'function' && typeof d.byteLength === 'number';
 
 	let wakeUp = null;
-	server.addEventListener('message', (e) => {
+	server.addEventListener('message', async (e) => {
 		if (finished) return;
-		const d = toU8(e);
+		let d = toU8(e);
+		if (!d && isBlobLike(e.data)) {
+			try { d = new Uint8Array(await e.data.arrayBuffer()); } catch { return; }
+		}
 		if (!d || !d.byteLength) return;
 		if (sessionReady) { writeUp(d); return; }
 		if (inbox.length > 64) { shutdown('inbox overflow'); return; }

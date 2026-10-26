@@ -63,6 +63,7 @@ class WS {
 	constructor() {
 		this._listeners = { message: [], error: [], close: [] };
 		this.written = [];
+		this.binaryType = 'blob'; // workerd 默认（websocket_standard_binary_type 兼容标志下）
 	}
 	accept() { this.accepted = true; }
 	send(data) { this.written.push(data instanceof Uint8Array ? data : new Uint8Array(data)); }
@@ -70,7 +71,16 @@ class WS {
 	addEventListener(type, fn) { (this._listeners[type] ||= []).push(fn); }
 	removeEventListener(type, fn) { const a = this._listeners[type] || []; const i = a.indexOf(fn); if (i >= 0) a.splice(i, 1); }
 	_push(chunk) { for (const fn of [...(this._listeners.message || [])]) fn({ data: chunk }); }
-	set binaryType(v) { }
+	// 模拟 workerd：binaryType='blob' 时二进制帧的 e.data 是 Blob（有 arrayBuffer()，无 byteLength）
+	_pushBlob(chunk) {
+		const blob = {
+			byteLength: chunk.byteLength,
+			arrayBuffer: async () => chunk.buffer.slice(chunk.byteOffset, chunk.byteOffset + chunk.byteLength),
+		};
+		for (const fn of [...(this._listeners.message || [])]) fn({ data: blob });
+	}
+	set binaryType(v) { this._binaryType = v; }
+	get binaryType() { return this._binaryType ?? 'blob'; }
 }
 let LAST = null;
 globalThis.WebSocketPair = class {
@@ -191,6 +201,15 @@ A(uaRes.body.includes('proxies:'), 'UA=Clash 自动给 YAML');
 	await sleep(600);
 	const flat = Buffer.concat(LAST.server.written.map(c => Buffer.from(c)));
 	A(flat[0] === 1 && flat[1] === 0 && flat.length === 2 + BIG.length, 'early data 免首帧直传');
+}
+// ---- binaryType / Blob 兜底（workerd websocket_standard_binary_type 兼容标志下 e.data 为 Blob）----
+{
+	const resp = await mod.default.fetch(makeRequest('wss://et.example.com/', { upgrade: 'websocket' }), env);
+	A(LAST.server.binaryType === 'arraybuffer', '隧道显式设置 binaryType=arraybuffer（防 Blob 静默丢包）');
+	LAST.server._pushBlob(hdr); // 模拟 binaryType 未生效时 e.data 为 Blob
+	await sleep(600);
+	const flat = Buffer.concat(LAST.server.written.map(c => Buffer.from(c)));
+	A(flat[0] === 1 && flat[1] === 0 && flat.length === 2 + BIG.length, 'Blob 首包兜底：arrayBuffer() 转换后隧道正常');
 }
 origin.close();
 console.log('=== done ===');
